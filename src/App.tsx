@@ -1,42 +1,13 @@
 import { Component, createSignal, For } from 'solid-js';
 import * as uuid from 'uuid';
-import { DateTime } from 'luxon';
-
-export interface DESCRIPTOR {
-  name: string;
-  emoji: string;
-}
-
-export interface DiaryEntry {
-  id: string;
-  date: string;
-  food: string | undefined;
-  feeling: DESCRIPTOR | undefined;
-  conditions: DESCRIPTOR[] | undefined;
-}
+import { DESCRIPTOR, DiaryEntry } from './types';
+import { Entry } from './Entry';
+import { Feelings } from './Feelings';
+import { Reactions } from './Reactions';
+import { isIn } from './isIn';
+import orderBy from 'lodash/orderBy';
 
 const App: Component = () => {
-  const feelAboutFood: DESCRIPTOR[] = [
-    { name: 'Good', emoji: '😄' },
-    { name: 'Neutral', emoji: '😐' },
-    { name: 'Bad', emoji: ' 😢' },
-  ];
-
-  const reactions: DESCRIPTOR[] = [
-    { name: 'Bloated', emoji: '🫃' },
-    { name: 'Constipated', emoji: '😬' },
-    { name: 'Diarrhea', emoji: '💩' },
-    { name: 'Gas', emoji: '💨' },
-    { name: 'Belching', emoji: '😮‍💨' },
-    { name: 'Joint Pain', emoji: '🦵' },
-    { name: 'Nausea', emoji: '🤢' },
-    { name: 'Vomiting', emoji: '🤮' },
-    { name: 'Rash', emoji: '😳' },
-    { name: 'Chills', emoji: '🥶' },
-    { name: 'Fever', emoji: '🥵' },
-    { name: 'Heart Burn', emoji: '❤️‍🔥' },
-  ];
-
   const [entries, setEntries] = createSignal<DiaryEntry[]>(loadState());
 
   const [food, setFood] = createSignal<string>('');
@@ -60,16 +31,6 @@ const App: Component = () => {
     }
 
     setSelectedReactions([...selectedReactions(), reaction]);
-  }
-
-  function isIn(
-    selector: DESCRIPTOR,
-    collection: DESCRIPTOR | DESCRIPTOR[] | undefined
-  ) {
-    if (typeof collection === 'undefined') return;
-
-    collection = Array.isArray(collection) ? collection : [collection];
-    return !!collection.find((item: DESCRIPTOR) => item.name === selector.name);
   }
 
   function addEntry() {
@@ -97,6 +58,23 @@ const App: Component = () => {
 
     saveState(newList);
     setEntries(newList);
+  }
+
+  function updateEntry(entryUpdate: DiaryEntry) {
+    const currentEntries = entries();
+    const update: DiaryEntry[] = currentEntries.map((entry) => {
+      if (entry.id !== entryUpdate.id) return entry;
+
+      return {
+        ...entry,
+        food: entryUpdate.food,
+        feeling: entryUpdate.feeling,
+        conditions: entryUpdate.conditions,
+      };
+    });
+
+    setEntries(update);
+    saveState(update);
   }
 
   function loadState() {
@@ -132,26 +110,10 @@ const App: Component = () => {
           <label class="text-[#4D5061] pl-4 text-sm">made me feel...</label>
           <div class="bg-[#4D5061] bg-opacity-30 p-4 rounded">
             <ul class="text-white flex w-full sm:w-auto">
-              <For each={feelAboutFood}>
-                {(item) => (
-                  <li
-                    class="bg-[#4D5061] first:rounded-l last:rounded-r mr-px last:mr-0 flex-1"
-                    classList={{
-                      'bg-[#E7E247]': isIn(item, selectedFeelAboutFood()),
-                      'text-black': isIn(item, selectedFeelAboutFood()),
-                    }}
-                  >
-                    <button
-                      class="text-lx sm:text-2xl p-2 py-1 flex items-center"
-                      title={item.name}
-                      onClick={() => toggleFeeling(item)}
-                    >
-                      <span class="mr-1.5">{item.emoji}</span>
-                      <span class="text-sm sm:text-lgg">{item.name}</span>
-                    </button>
-                  </li>
-                )}
-              </For>
+              <Feelings
+                selected={selectedFeelAboutFood}
+                callback={toggleFeeling}
+              />
             </ul>
           </div>
         </div>
@@ -160,24 +122,7 @@ const App: Component = () => {
             and gave me... (select all that apply)
           </label>
           <ul class="text-white grid grid-cols-3 gap-1 bg-[#4D5061] bg-opacity-30 p-4 rounded">
-            <For each={reactions}>
-              {(item) => (
-                <li>
-                  <button
-                    class="w-full flex items-center text-lx sm:text-2xl p-1.5 py-1 bg-[#4D5061] rounded"
-                    classList={{
-                      'bg-[#E7E247]': isIn(item, selectedReactions()),
-                      'text-black': isIn(item, selectedReactions()),
-                    }}
-                    title={item.name}
-                    onClick={() => toggleReaction(item)}
-                  >
-                    <span class="mr-1.5">{item.emoji}</span>
-                    <span class="text-sm sm:text-lg">{item.name}</span>
-                  </button>
-                </li>
-              )}
-            </For>
+            <Reactions selected={selectedReactions} callback={toggleReaction} />
           </ul>
         </div>
         <button
@@ -188,75 +133,17 @@ const App: Component = () => {
         </button>
       </section>
 
-      <section class="w-full sm:w-auto px-4 max-w-[72rem] lg:min-w-[66rem] md:min-w-[56rem]">
+      <section class="w-full px-4 max-w-[72rem]">
         {entries().length > 0 && (
-          <>
-            <For each={entries().reverse()}>
-              {(item) => (
-                <>
-                  <div class="sm:grid sm:grid-cols-5">
-                    <div class="px-4 py-2 text-[#4D5061] text-sm">
-                      {DateTime.fromISO(item.date).toFormat('ff')}
-                    </div>
-                    <div class="px-4 py-2 text-[#4D5061] text-sm hidden sm:block">
-                      made me feel...
-                    </div>
-                    <div class="px-4 py-2 text-[#4D5061] text-sm hidden sm:block">
-                      and gave me...
-                    </div>
-                  </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 bg-[#4D5061] bg-opacity-30 rounded p-4 mb-4 items-start">
-                    <div>{item.food}</div>
-                    <div class="mt-3 text-[#4D5061] text-sm sm:hidden">
-                      made me feel...
-                    </div>
-                    <div class="text-white">
-                      <button
-                        class="flex items-center text-lx sm:text-2xl p-1.5 py-1 bg-[#4D5061] rounded"
-                        title={item.feeling?.name}
-                      >
-                        <span class="mr-1.5">{item.feeling?.emoji}</span>
-                        <span class="text-sm sm:text-lg">
-                          {item.feeling?.name}
-                        </span>
-                      </button>
-                    </div>
-                    <div class="mt-3 text-[#4D5061] text-sm sm:hidden">
-                      and gave me...
-                    </div>
-                    <div class="flex flex-wrap gap-2 sm:col-span-2">
-                      <For each={item.conditions}>
-                        {(condition) => (
-                          <button
-                            class="flex items-center text-lx sm:text-2xl p-1.5 py-1 bg-[#4D5061] rounded text-white"
-                            title={condition.name}
-                          >
-                            <span class="mr-1.5">{condition.emoji}</span>
-                            <span class="text-sm sm:text-lg">
-                              {condition.name}
-                            </span>
-                          </button>
-                        )}
-                      </For>
-                      {item.conditions?.length === 0 && (
-                        <span class="flex items-center text-lx sm:text-2xl p-1.5 py-1 bg-[#4D5061] rounded text-white">
-                          No reaction
-                        </span>
-                      )}
-                    </div>
-                    <div class="justify-self-end">
-                      <button
-                        class="text-2xl ml-2"
-                        onClick={() => removeEntry(item.id)}
-                      >
-                        ❌
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </For>
-          </>
+          <For each={orderBy(entries(), ['date'], ['desc'])}>
+            {(item) => (
+              <Entry
+                entry={item}
+                removeCallback={removeEntry}
+                updateCallback={updateEntry}
+              />
+            )}
+          </For>
         )}
       </section>
     </div>
